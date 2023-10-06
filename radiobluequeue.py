@@ -25,8 +25,8 @@ logging.getLogger("asyncio").setLevel(logging.WARNING)
 
 
 SERVER_URL = 'http://127.0.0.1:32400'
-SERVER_TOKEN = os.getenv('PLEX_TOKEN', 'p2QAMVvT3kC2LPcU827e')
-CLIENT_NAME = os.getenv('CLIENT_NAME', 'WorkPlexamp')
+SERVER_TOKEN = os.getenv('PLEX_TOKEN', '')
+CLIENT_NAME = os.getenv('CLIENT_NAME', 'MyPlexamp')
 LIBRARY_SECTION = os.getenv('LIBRARY_SECTION', 'Music')
 CONFIG_FILE = 'config.json'
 
