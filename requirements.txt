@@ -1,1 +1,2 @@
 InquirerPy==0.3.4
+PlexAPI==4.15.4
