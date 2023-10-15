@@ -228,17 +228,18 @@ class RadioBlueQueue:
         playlists = self.load_playlists()
         for song in playlists.get('on-air'):
             if song.title in self.played_songs:
-                LOG.debug(f'{song.title} has already been played')
+                #LOG.debug(f'{song.title} has already been played')
                 continue
             LOG.debug(f'Adding {song.title} to queue')
             self.played_songs[song.title] = song
             self.play_queue.addItem(song)
             self.refresh_play_queue()
-            print(song.title)
 
-        # iterate over queue and remove anything not in playlist
+    def update_now_playing(self):
+        """Update the now playing text pointer"""
+        for session in self.server.sessions():
+            LOG.debug(session)
 
-        # confirm order?
 
 def main():
     """Main"""
@@ -252,6 +253,7 @@ def main():
         LOG.debug("Syncing playlist...")
         logging.getLogger("plexapi").setLevel(logging.INFO)
         rbq.sync_playlist()
+        rbq.update_now_playing()
         time.sleep(1)
 
 if __name__ == '__main__':

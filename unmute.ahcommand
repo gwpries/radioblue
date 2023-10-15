@@ -1,0 +1,9 @@
+let sessionName = "Radio Blue On-air";
+
+let session = app.sessionWithName( sessionName )
+
+session.blocks.forEach( block =>
+{
+	if (block.name == "Mic")
+		block.disabled = false
+});
