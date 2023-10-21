@@ -6,6 +6,8 @@ import time
 import sys
 import json
 import logging
+import requests
+import base64
 
 from InquirerPy import inquirer
 from InquirerPy.base import Choice
@@ -14,6 +16,7 @@ from plexapi.server import PlexServer
 from plexapi.playqueue import PlayQueue
 from plexapi.playlist import Playlist
 from plexapi.myplex import MyPlexAccount
+from plexapi.audio import Audio
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
@@ -29,6 +32,14 @@ SERVER_TOKEN = os.getenv('PLEX_TOKEN', '')
 CLIENT_NAME = os.getenv('CLIENT_NAME', 'MyPlexamp')
 LIBRARY_SECTION = os.getenv('LIBRARY_SECTION', 'Music')
 CONFIG_FILE = 'config.json'
+NOW_PLAYING = """
+Title: {title}
+Artist: {artist_name} 
+Album: {album_name} 
+ArtworkData: {artwork_data} 
+Artwork: {artwork_url}
+Time: {length} 
+"""
 
 class RadioBlueQueue:
     """Handle queueing for radio broadcast"""
@@ -38,6 +49,7 @@ class RadioBlueQueue:
         self.play_queue = None
         self.client = None
         self.played_songs = {}
+        self.currently_playing = {}
 
     def setup(self):
         self.options = self.get_all_options()
@@ -235,10 +247,50 @@ class RadioBlueQueue:
             self.play_queue.addItem(song)
             self.refresh_play_queue()
 
+    def get_artwork(self, suffix):
+        headers = {
+            'X-Plex-Token': self.options.get('server_token')
+        }
+        url = f'{self.options.get("server_url")}{suffix}'
+        response = requests.get(url,
+            headers=headers)
+        response.raise_for_status()
+        return base64.b64encode(response.content).decode('utf-8')
+        
+
     def update_now_playing(self):
         """Update the now playing text pointer"""
         for session in self.server.sessions():
+            if session.player.title != self.options['client_name']:
+                continue
+            #if self.currently_playing.get('title') == session.title:
+            #    continue
+            LOG.debug(session.player.title)
+            LOG.debug(session.parentTitle)
+            ms = session.duration
+            seconds, ms = divmod(ms, 1000)
+            minutes, seconds = divmod(seconds, 60)
+            duration = f'{int(minutes):01d}:{int(seconds):02d}'
+            artwork_data = ''
+            try:
+                artwork_data = self.get_artwork(session.art)
+            except Exception:
+                LOG.error("Failed to fetch artwork")
+
             LOG.debug(session)
+            self.currently_playing = {
+                'title': session.title,
+            }
+
+            now_playing_txt = NOW_PLAYING.format(
+                title=session.title,
+                artist_name=session.grandparentTitle,
+                album_name=session.parentTitle,
+                artwork_url=session.art,
+                artwork_data=artwork_data,
+                length=duration)
+            with open('./Now Playing.txt', 'w', encoding='utf-8') as out_fh:
+                out_fh.write(now_playing_txt)
 
     def update_time_remaining(self):
         """Update time remaining"""

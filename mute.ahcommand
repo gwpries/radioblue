@@ -4,6 +4,6 @@ let session = app.sessionWithName( sessionName )
 
 session.blocks.forEach( block =>
 {
-	if (block.name == "Mic")
-		block.disabled = true
+	if (block.name == "Mic Switch")
+		block.switchToB()
 });
