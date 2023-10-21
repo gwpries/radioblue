@@ -240,20 +240,29 @@ class RadioBlueQueue:
         for session in self.server.sessions():
             LOG.debug(session)
 
+    def update_time_remaining(self):
+        """Update time remaining"""
+        for mediatype in self.client.timelines():
+            if not mediatype.time:
+                continue
+            curtime = mediatype.time
+            curdur = mediatype.duration
+            curtimemin = int(curtime)/60000
+            curdurmin = int(curdur)/60000
+            percent = int((curtimemin / curdurmin) * 100)
+            LOG.debug(f"We are at minute {curtimemin} out of {curdurmin} ({percent}%)")
 
 def main():
     """Main"""
     rbq = RadioBlueQueue()
     rbq.setup()
 
-    for item in rbq.playlists.get('on-air'):
-        print(item.title)
     rbq.play()
     while True:
-        LOG.debug("Syncing playlist...")
         logging.getLogger("plexapi").setLevel(logging.INFO)
         rbq.sync_playlist()
         rbq.update_now_playing()
+        rbq.update_time_remaining()
         time.sleep(1)
 
 if __name__ == '__main__':
