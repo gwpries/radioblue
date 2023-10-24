@@ -11,6 +11,7 @@ import base64
 import threading
 import subprocess
 import signal
+import math
 
 from flask import Flask, jsonify
 app = Flask(__name__)
@@ -276,7 +277,6 @@ class RadioBlueQueue:
         """Sync the play queue and play list"""
         playlists = self.load_playlists()
         full_queue = self.play_queue.get(self.server, playQueueID=self.play_queue.playQueueID)
-        LOG.debug(f"QUEUE POSITION: {full_queue.playQueueSelectedItemID}")
         queue_items = {}
         for fqueue_item in full_queue:
             #LOG.debug(f"{fqueue_item.title} - {fqueue_item.playQueueItemID}")
@@ -294,6 +294,9 @@ class RadioBlueQueue:
                     play_pos in self.used_silence_positions:
                 #LOG.debug(f'Skipping silence re-add')
                 continue
+            if song.guid != self.options.get('silence_track') and \
+                    self.queued_songs.get(song.guid):
+                continue 
 
             LOG.debug(f'Adding {song.title} to queue')
             if song.guid == self.options.get('silence_track'):
@@ -375,23 +378,27 @@ class RadioBlueQueue:
         silence = ""
         full_queue = self.play_queue.get(self.server, playQueueID=self.play_queue.playQueueID)
         for item in full_queue.items:
-            LOG.debug(item.playQueueItemID)
+            this_duration = item.duration
+            is_silence_track = False
+            if item.guid == self.options.get('silence_track'):
+                is_silence_track = True
+            if is_silence_track:
+                this_duration = 0
+            if item.playQueueItemID <= full_queue.playQueueSelectedItemID:
+                continue
             if self.currently_playing and self.currently_playing.get('title') == item.title:
-                if item.guid == self.options.get('silence_track'):
+                if is_silence_track:
                     silence = 'now'
                 total_duration += item.duration
-            if self.played_songs.get(item.guid):
-                continue
-            if track_title != item.title:
+            if track_title != item.title and not is_silence_track:
                 queue_count += 1 
-            if not silence and item.guid == self.options.get('silence_track'):
+            if not silence and is_silence_track:
                 silence = "queued"
-            total_duration += item.duration
+
+            LOG.debug(f"Adding duration {this_duration} for {item.title}")
+            total_duration += this_duration
         if self.playing_next and self.playing_next.get('guid') == self.options.get('silence_track'):
             silence = "next"
-        td_seconds = int((total_duration / 1000) % 60)
-        td_minutes = int((total_duration / (1000 * 60)) % 60)
-        td_hours = int((total_duration / (1000 * 60 * 60)) % 60)
 
         mediatype = None
         for mediatype in self.client.timelines():
@@ -407,7 +414,7 @@ class RadioBlueQueue:
         timeleft = curdur - curtime
         if not timeleft:
             return
-        if timeleft == 'NaN':
+        if math.isnan(timeleft):
             return
         millis = int(timeleft)
         seconds=(millis/1000)%60

@@ -37,9 +37,9 @@ def main():
         if silence == "queued":
             text_rows.append(render.Text("MIC QUEUED"))
         elif silence == "next":
-            text_rows.append(render.Text("SILENCE NEXT"))
+            text_rows.append(render.Text("ON MIC NEXT"))
         elif silence == "now":
-            text_rows.append(render.Text("SPEAK NOW"))
+            text_rows.append(render.Text("ON MIC NOW"))
  
     return render.Root(
         child = render.Column(
