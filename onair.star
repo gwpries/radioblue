@@ -9,7 +9,8 @@ def main():
             children = [
                 render.Text("Welcome to", color="#0000ff"),
                 render.Text("Radio Blue", color="#0000ff"),
-                render.Text("Loading...", color="#ffffff"),
+                render.Text("Mothership", color="#ffffff"),
+                render.Text("Connecting...", color="#ffffff")
             ]
         )
     )

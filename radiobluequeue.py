@@ -276,9 +276,8 @@ class RadioBlueQueue:
     def sync_playlist(self):
         """Sync the play queue and play list"""
         playlists = self.load_playlists()
-        full_queue = self.play_queue.get(self.server, playQueueID=self.play_queue.playQueueID)
         queue_items = {}
-        for fqueue_item in full_queue:
+        for fqueue_item in self.play_queue.items:
             #LOG.debug(f"{fqueue_item.title} - {fqueue_item.playQueueItemID}")
             if not queue_items.get(fqueue_item.guid):
                 queue_items[fqueue_item.guid] = []
@@ -341,6 +340,7 @@ class RadioBlueQueue:
             LOG.debug(session)
             self.currently_playing = {
                 'title': session.title,
+                'guid': session.guid
             }
             ps_key = session.guid
             self.played_songs[ps_key] = True
@@ -376,26 +376,25 @@ class RadioBlueQueue:
         total_duration = 0
         queue_count = 0 
         silence = ""
-        full_queue = self.play_queue.get(self.server, playQueueID=self.play_queue.playQueueID)
-        for item in full_queue.items:
+        #full_queue = self.play_queue.get(self.server, playQueueID=self.play_queue.playQueueID)
+        for item in self.play_queue.items:
             this_duration = item.duration
             is_silence_track = False
             if item.guid == self.options.get('silence_track'):
                 is_silence_track = True
             if is_silence_track:
                 this_duration = 0
-            if item.playQueueItemID <= full_queue.playQueueSelectedItemID:
-                continue
-            if self.currently_playing and self.currently_playing.get('title') == item.title:
+            if self.currently_playing and self.currently_playing.get('guid') == item.guid:
                 if is_silence_track:
-                    silence = 'now'
-                total_duration += item.duration
+                    silence = "now"
+            if item.playQueueItemID <= self.play_queue.playQueueSelectedItemID:
+                continue
             if track_title != item.title and not is_silence_track:
                 queue_count += 1 
             if not silence and is_silence_track:
                 silence = "queued"
 
-            LOG.debug(f"Adding duration {this_duration} for {item.title}")
+            #LOG.debug(f"Adding duration {this_duration} for {item.title}")
             total_duration += this_duration
         if self.playing_next and self.playing_next.get('guid') == self.options.get('silence_track'):
             silence = "next"
@@ -426,7 +425,7 @@ class RadioBlueQueue:
         curdurmin = int(curdur)/60000
         percent = int((curtimemin / curdurmin) * 100)
 
-        total_duration -= curtime
+        total_duration += millis 
         td_seconds = int((total_duration / 1000) % 60)
         td_minutes = int((total_duration / (1000 * 60)) % 60)
         td_hours = int((total_duration / (1000 * 60 * 60)) % 60)
