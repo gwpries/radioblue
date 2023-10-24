@@ -1,0 +1,5 @@
+let sessionName = "Radio Blue On-air";
+
+let session = app.sessionWithName( sessionName )
+
+session.stop()
