@@ -373,7 +373,9 @@ class RadioBlueQueue:
         total_duration = 0
         queue_count = 0 
         silence = ""
-        for item in self.play_queue.items:
+        full_queue = self.play_queue.get(self.server, playQueueID=self.play_queue.playQueueID)
+        for item in full_queue.items:
+            LOG.debug(item.playQueueItemID)
             if self.currently_playing and self.currently_playing.get('title') == item.title:
                 if item.guid == self.options.get('silence_track'):
                     silence = 'now'
