@@ -276,7 +276,11 @@ class RadioBlueQueue:
         """Sync the play queue and play list"""
         playlists = self.load_playlists()
         for song in playlists.get('on-air'):
-            if song.guid in self.queued_songs:
+            already_queued = False
+            for track in self.play_queue:
+                if track.guid == song.guid:
+                    already_queued = True
+            if already_queued:
                 #LOG.debug(f'{song.title} has already been played')
                 continue
             LOG.debug(f'Adding {song.title} to queue')
