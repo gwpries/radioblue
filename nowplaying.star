@@ -21,10 +21,16 @@ def main():
  
     percent = rep.json()['percent'] 
 
+    queue_time = "00:00"
+    if td_hours == "00":
+        queue_time = "%s:%s" % (td_minutes, td_seconds)
+    else:
+        queue_time = "%s:%s:%s" % (td_hours, td_minutes, td_seconds)
+
     text_rows = [
         render.Text("%s" % track_title, color=track_title_color),
         render.Text("C: %s:%s (%d%%)" % (minutes, seconds, percent), color=track_left_color),
-        render.Text("Q: %s|%s:%s:%s" % (queue_count, td_hours, td_minutes, td_seconds), color=queue_color)
+        render.Text("Q: %s %s" % (queue_count, queue_time), color=queue_color)
     ]
 
     if silence:

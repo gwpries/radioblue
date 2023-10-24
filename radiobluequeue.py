@@ -23,6 +23,7 @@ from plexapi.playqueue import PlayQueue
 from plexapi.playlist import Playlist
 from plexapi.myplex import MyPlexAccount
 from plexapi.audio import Audio
+import plexapi.exceptions
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(
@@ -61,12 +62,13 @@ class RadioBlueQueue:
         self.currently_playing = {}
         self.playing_next = {}
         self.ready = False
+        self.state = "starting"
+        self.used_silence_positions = []
 
     def setup(self):
         self.options = self.get_all_options()
         self.playlists = self.load_playlists()
-        self.play_queue = self.init_play_queue(
-            [self.playlists['on-air'][0]])
+        self.play_queue = self.init_play_queue()
         self.client = self.get_client()
 
     def load_playlists(self):
@@ -75,14 +77,12 @@ class RadioBlueQueue:
         output['on-air'] = self.server.playlist(self.options.get('on_air_playlist'))
         return output
 
-    def init_play_queue(self, items):
+    def init_play_queue(self):
         music_section = self.server.library.section("Music")
+        items = []
         if self.options.get('silence_track'):
             for track in music_section.searchTracks(guid=self.options.get('silence_track')):
-                silence_track = track
-            items = [silence_track] + items
-        for item in items:
-            self.queued_songs[item.guid] = item
+                items.append(track)
         return PlayQueue.create(self.server, items)
 
     def play(self):
@@ -275,18 +275,37 @@ class RadioBlueQueue:
     def sync_playlist(self):
         """Sync the play queue and play list"""
         playlists = self.load_playlists()
+        full_queue = self.play_queue.get(self.server, playQueueID=self.play_queue.playQueueID)
+        LOG.debug(f"QUEUE POSITION: {full_queue.playQueueSelectedItemID}")
+        queue_items = {}
+        for fqueue_item in full_queue:
+            #LOG.debug(f"{fqueue_item.title} - {fqueue_item.playQueueItemID}")
+            if not queue_items.get(fqueue_item.guid):
+                queue_items[fqueue_item.guid] = []
+            queue_items[fqueue_item.guid].append(fqueue_item.playQueueItemID) 
+ 
+        play_pos = 0
         for song in playlists.get('on-air'):
-            already_queued = False
-            for track in self.play_queue:
-                if track.guid == song.guid:
-                    already_queued = True
-            if already_queued:
-                #LOG.debug(f'{song.title} has already been played')
+            play_pos += 1
+            if song.guid in queue_items and song.guid != self.options.get('silence_track'):
+                #LOG.debug(f"{song.title} has already been played: {song}")
                 continue
+            if song.guid == self.options.get('silence_track') and \
+                    play_pos in self.used_silence_positions:
+                #LOG.debug(f'Skipping silence re-add')
+                continue
+
             LOG.debug(f'Adding {song.title} to queue')
+            if song.guid == self.options.get('silence_track'):
+                #LOG.debug(f"Marking silence position {play_pos} as used")
+                self.used_silence_positions.append(play_pos)
+                
             self.queued_songs[song.guid] = song
             self.play_queue.addItem(song)
-            self.refresh_play_queue()
+        self.refresh_play_queue()
+        full_queue = self.play_queue.get(
+            self.server, playQueueID=self.play_queue.playQueueID)
+            
 
     def get_artwork(self, suffix):
         headers = {
@@ -467,6 +486,7 @@ class RadioBlueQueue:
 
     def stop(self):
         """Stop client from playing"""
+        self.state = "stopping"
         self.client.pause()
 
 
@@ -478,12 +498,14 @@ def web():
 def tidbyt(rbq):
     """Refresh the tidbyt"""
     while True:
-        if not rbq.ready:
-            time.sleep(1)
-            continue
         try:
-            rbq.tidbyt('nowplaying')
-        except Exception:
+            if not rbq.ready:
+                rbq.tidbyt('onair')
+            elif rbq.state == 'stopping':
+                rbq.tidbyt('offair')
+            else:
+                rbq.tidbyt('nowplaying')
+        except subprocess.CalledProcessError:
             pass
         time.sleep(1)
 
@@ -529,9 +551,8 @@ def main():
     except KeyboardInterrupt:
         LOG.info("Keyboard interrupt, shutting down")
         rbq.stop_ah()
-        time.sleep(1)
-        rbq.tidbyt('offair')
         rbq.stop()
+        time.sleep(1)
         sys.exit()
 
 if __name__ == '__main__':
