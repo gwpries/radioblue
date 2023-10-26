@@ -303,7 +303,10 @@ class RadioBlueQueue:
                 self.used_silence_positions.append(play_pos)
                 
             self.queued_songs[song.guid] = song
-            self.play_queue.addItem(song)
+            try:
+                self.play_queue.addItem(song)
+            except Exception:
+                LOG.error("Failed to add item to play queue")                 
         self.refresh_play_queue()
         full_queue = self.play_queue.get(
             self.server, playQueueID=self.play_queue.playQueueID)
@@ -357,8 +360,12 @@ class RadioBlueQueue:
                     }
                     break
 
+            track_title = session.title
+            if track_title == 'Silence':
+                track_title = 'On mic'
+                
             now_playing_txt = NOW_PLAYING.format(
-                title=session.title,
+                title=track_title,
                 artist_name=session.grandparentTitle,
                 album_name=session.parentTitle,
                 artwork_url=session.art,
@@ -445,6 +452,10 @@ class RadioBlueQueue:
         else:
             queue_color = "#00ff00"
 
+        mic_live = False
+        if os.path.exists('./mic.indicator'):
+            mic_live = True
+
         timeleft = {
             'hours': hours,
             'minutes': f'{minutes:02}',
@@ -456,6 +467,7 @@ class RadioBlueQueue:
             'queue_color': queue_color, 
             'track_left_color': track_left_color,
             'track_title': track_title,
+            'mic_live': mic_live,
             'percent': percent,
             'silence': silence
         }

@@ -18,6 +18,7 @@ def main():
     queue_count = rep.json()['queue_count']
     queue_color = rep.json()['queue_color']
     silence = rep.json()['silence']
+    mic_live = rep.json()['mic_live']
  
     percent = rep.json()['percent'] 
 
@@ -27,6 +28,11 @@ def main():
     else:
         queue_time = "%s:%s:%s" % (td_hours, td_minutes, td_seconds)
 
+    if mic_live:
+        mic_color = "#ff0000"
+    else:
+        mic_color = "#ffffff"
+
     text_rows = [
         render.Text("%s" % track_title, color=track_title_color),
         render.Text("C: %s:%s (%d%%)" % (minutes, seconds, percent), color=track_left_color),
@@ -35,11 +41,13 @@ def main():
 
     if silence:
         if silence == "queued":
-            text_rows.append(render.Text("MIC QUEUED"))
+            text_rows.append(render.Text("MIC QUEUED", color=mic_color))
         elif silence == "next":
-            text_rows.append(render.Text("ON MIC NEXT"))
+            text_rows.append(render.Text("ON MIC NEXT", color=mic_color))
         elif silence == "now":
-            text_rows.append(render.Text("ON MIC NOW"))
+            text_rows.append(render.Text("ON MIC NOW", color=mic_color))
+    elif mic_live:
+        text_rows.append(render.Text("LIVE MIC", color=mic_color))
  
     return render.Root(
         child = render.Column(

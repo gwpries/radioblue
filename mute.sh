@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 open /Users/gpries/git/radioblue/mute.ahcommand
-touch mute.indicator
+rm -f /Users/gpries/git/radioblue/mic.indicator
