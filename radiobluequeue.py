@@ -72,6 +72,16 @@ class RadioBlueQueue:
         self.play_queue = self.init_play_queue()
         self.client = self.get_client()
 
+    def connect_client(self):
+        """Get client"""
+        self.client = self.get_client()
+
+    def load_config(self):
+        """Load config"""
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as config_fh:
+                self.options = json.loads(config_fh.read())
+
     def load_playlists(self):
         """Load all playlists"""
         output = {}
@@ -263,7 +273,8 @@ class RadioBlueQueue:
 
     def get_client(self):
         """Fetch the plex client"""
-        return self.server.client(self.options['client_name'])
+        self.client = self.server.client(self.options['client_name'])
+        return self.client
 
     def refresh_play_queue_from_server(self):
         """Pull the PQ from the server"""
@@ -509,9 +520,14 @@ class RadioBlueQueue:
         self.state = "stopping"
         self.client.pause()
 
+    def next_track(self):
+        """Skip client to next track"""
+        self.client.skipNext()
 
-def web():
+
+def web(rbq):
     """Run web server"""
+    app.config['rbq'] = rbq
     app.run(debug=True, use_reloader=False, host='0.0.0.0', port=5050)
 
 
@@ -539,7 +555,12 @@ def timeleft():
             data = {} 
     return jsonify(data)
 
-
+@app.route("/next")
+def next_track():
+    """hello"""
+    app.config['rbq'].next_track()
+    return "next track" 
+    
 def update_status(rbq):
     """Update status"""
     while True:
@@ -557,7 +578,7 @@ def main():
     rbq.tidbyt('onair')
     rbq.start_ah()
     rbq.play()
-    web_thread = threading.Thread(target=web, daemon=True).start()
+    web_thread = threading.Thread(target=web, daemon=True, args=(rbq,)).start()
     tidbyt_thread = threading.Thread(target=tidbyt, args=(rbq,), daemon=True).start()
     update_thread = threading.Thread(target=update_status, args=(rbq,), daemon=True).start()
     try:
