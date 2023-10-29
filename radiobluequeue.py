@@ -13,7 +13,8 @@ import subprocess
 import signal
 import math
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_file
+
 app = Flask(__name__)
 
 from InquirerPy import inquirer
@@ -40,6 +41,7 @@ SERVER_URL = 'http://127.0.0.1:32400'
 SERVER_TOKEN = os.getenv('PLEX_TOKEN', '')
 CLIENT_NAME = os.getenv('CLIENT_NAME', 'MyPlexamp')
 LIBRARY_SECTION = os.getenv('LIBRARY_SECTION', 'Music')
+TIDBYT_SERVER = 'http://192.168.1.120:5123'
 PIXLET_PATH = '/usr/local/bin/pixlet'
 CONFIG_FILE = 'config.json'
 NOW_PLAYING = """
@@ -487,20 +489,10 @@ class RadioBlueQueue:
 
     def tidbyt(self, starlet_file="onair"):
         """Render and push a tidbyt image"""
-        if not self.options.get('tidbyt_device_id'):
-            return
-        cmd = [PIXLET_PATH, 'render', f'{starlet_file}.star']
-        subprocess.run(cmd, check=True)
-        os.environ['TIDBYT_API_TOKEN'] = self.options.get('tidbyt_api_token')
-        cmd = [
-            PIXLET_PATH,
-            'push',
-            '--installation-id',
-            'radioblue',
-            self.options.get('tidbyt_device_id'),
-            f'{starlet_file}.webp']
-        subprocess.run(cmd, check=True)
-
+        with open(f'{starlet_file}.star', 'rb') as fileh:
+            response = requests.post(f'{TIDBYT_SERVER}/serve',
+                files={'data': fileh})
+ 
     def stop_ah(self):
         cmd = [
             'open',
@@ -524,26 +516,19 @@ class RadioBlueQueue:
         """Skip client to next track"""
         self.client.skipNext()
 
+    def add_silence(self):
+        """Add silence to the queue"""
+        music_section = self.server.library.section("Music")
+        items = []
+        if self.options.get('silence_track'):
+            for track in music_section.searchTracks(guid=self.options.get('silence_track')):
+                self.play_queue.addItem(track)
+            self.refresh_play_queue()
 
 def web(rbq):
     """Run web server"""
     app.config['rbq'] = rbq
     app.run(debug=True, use_reloader=False, host='0.0.0.0', port=5050)
-
-
-def tidbyt(rbq):
-    """Refresh the tidbyt"""
-    while True:
-        try:
-            if not rbq.ready:
-                rbq.tidbyt('onair')
-            elif rbq.state == 'stopping':
-                rbq.tidbyt('offair')
-            else:
-                rbq.tidbyt('nowplaying')
-        except subprocess.CalledProcessError:
-            pass
-        time.sleep(1)
 
 
 @app.route("/")
@@ -555,12 +540,21 @@ def timeleft():
             data = {} 
     return jsonify(data)
 
+
 @app.route("/next")
 def next_track():
     """hello"""
     app.config['rbq'].next_track()
     return "next track" 
     
+
+@app.route("/silence")
+def add_silence():
+    """queue up silence"""
+    app.config['rbq'].add_silence()
+    return "add silence" 
+ 
+
 def update_status(rbq):
     """Update status"""
     while True:
@@ -574,26 +568,27 @@ def update_status(rbq):
 def main():
     """Main"""
     rbq = RadioBlueQueue()
-    rbq.setup()
     rbq.tidbyt('onair')
-    rbq.start_ah()
+    rbq.setup()
+    #rbq.start_ah()
     rbq.play()
     web_thread = threading.Thread(target=web, daemon=True, args=(rbq,)).start()
-    tidbyt_thread = threading.Thread(target=tidbyt, args=(rbq,), daemon=True).start()
     update_thread = threading.Thread(target=update_status, args=(rbq,), daemon=True).start()
     try:
         while True:
             logging.getLogger("plexapi").setLevel(logging.INFO)
             rbq.refresh_play_queue_from_server()
             rbq.sync_playlist()
+            rbq.tidbyt('nowplaying')
             rbq.update_now_playing()
             rbq.ready = True
             time.sleep(1)
     except KeyboardInterrupt:
         LOG.info("Keyboard interrupt, shutting down")
-        rbq.stop_ah()
+        #rbq.stop_ah()
         rbq.stop()
         time.sleep(1)
+        rbq.tidbyt('offair')
         sys.exit()
 
 if __name__ == '__main__':
