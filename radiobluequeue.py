@@ -10,6 +10,7 @@ import requests
 import base64
 import threading
 import subprocess
+import traceback
 import signal
 import math
 
@@ -522,7 +523,10 @@ class RadioBlueQueue:
         items = []
         if self.options.get('silence_track'):
             for track in music_section.searchTracks(guid=self.options.get('silence_track')):
-                self.play_queue.addItem(track)
+                try:
+                    self.play_queue.addItem(track)
+                except Exception:
+                    pass
             self.refresh_play_queue()
 
 def web(rbq):
@@ -561,7 +565,10 @@ def update_status(rbq):
         if not rbq.ready:
             time.sleep(1)
             continue
-        rbq.update_stats()
+        try:
+            rbq.update_stats()
+        except Exception:
+            pass
         time.sleep(0.5)
 
 
@@ -575,13 +582,18 @@ def main():
     web_thread = threading.Thread(target=web, daemon=True, args=(rbq,)).start()
     update_thread = threading.Thread(target=update_status, args=(rbq,), daemon=True).start()
     try:
+        rbq.tidbyt('nowplaying')
         while True:
             logging.getLogger("plexapi").setLevel(logging.INFO)
-            rbq.refresh_play_queue_from_server()
-            rbq.sync_playlist()
-            rbq.tidbyt('nowplaying')
-            rbq.update_now_playing()
-            rbq.ready = True
+            try:
+                rbq.refresh_play_queue_from_server()
+                rbq.sync_playlist()
+                rbq.update_now_playing()
+                rbq.ready = True
+            except Exception:
+                LOG.error(traceback.format_exc())
+                LOG.error("Exception from plex api, retrying...") 
+                pass
             time.sleep(1)
     except KeyboardInterrupt:
         LOG.info("Keyboard interrupt, shutting down")
