@@ -11,14 +11,17 @@ def main():
     seconds = rep.json()['seconds']
     td_minutes = rep.json()['td_minutes']
     td_seconds = rep.json()['td_seconds']
+    ts_minutes = rep.json()['ts_minutes']
+    ts_seconds = rep.json()['ts_seconds']
     td_hours = rep.json()['td_hours']
     track_title = rep.json()['track_title']
     track_title_color = "#0000ff"
     track_left_color = rep.json()['track_left_color']
     queue_count = rep.json()['queue_count']
     queue_color = rep.json()['queue_color']
-    silence = rep.json()['silence']
+    on_mic = rep.json()['on_mic']
     mic_live = rep.json()['mic_live']
+    mic_color = rep.json()['mic_color']
  
     percent = rep.json()['percent'] 
 
@@ -30,8 +33,6 @@ def main():
 
     if mic_live:
         mic_color = "#ff0000"
-    else:
-        mic_color = "#ffffff"
 
     text_rows = [
         render.Text("%s" % track_title, color=track_title_color),
@@ -39,13 +40,14 @@ def main():
         render.Text("Q: %s %s" % (queue_count, queue_time), color=queue_color)
     ]
 
-    if silence:
-        if silence == "queued":
-            text_rows.append(render.Text("MIC QUEUED", color=mic_color))
-        elif silence == "next":
-            text_rows.append(render.Text("ON MIC NEXT", color=mic_color))
-        elif silence == "now":
+    if on_mic:
+        time_til_mic = "%s:%s" % (ts_minutes, ts_seconds)
+        if on_mic == "now":
             text_rows.append(render.Text("ON MIC NOW", color=mic_color))
+        elif on_mic == "next":
+            text_rows.append(render.Text("MIC NEXT %s" % time_til_mic, color=mic_color))
+        else:
+            text_rows.append(render.Text("MIC IN %s" % time_til_mic, color=mic_color))
     elif mic_live:
         text_rows.append(render.Text("LIVE MIC", color=mic_color))
  
