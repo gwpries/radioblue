@@ -318,10 +318,6 @@ class RadioBlueQueue:
             self.queued_songs[song.guid] = song
             try:
                 self.play_queue.addItem(song)
-                self.added_items += 1
-                if self.added_items >= ITEMS_BEFORE_SILENCE:
-                    self.added_items = 0
-                    self.add_silence()
             except Exception:
                 LOG.error("Failed to add item to play queue")
         self.refresh_play_queue()
@@ -530,11 +526,25 @@ class RadioBlueQueue:
     def stop(self):
         """Stop client from playing"""
         self.state = "stopping"
-        self.client.pause()
+        #self.client.pause()
 
     def next_track(self):
         """Skip client to next track"""
         self.client.skipNext()
+
+    def pause(self):
+        """Pause"""
+        self.client.pause()
+
+    def unpause(self):
+        """Play"""
+        self.client.play()
+
+    def delete_last(self):
+        """Play"""
+        last_item = self.play_queue.items[-1]
+        self.play_queue.removeItem(last_item)
+        self.refresh_play_queue()
 
     def add_silence(self):
         """Add silence to the queue"""
@@ -572,6 +582,23 @@ def next_track():
     app.config["rbq"].next_track()
     return "next track"
 
+@app.route("/pause")
+def pause():
+    """hello"""
+    app.config["rbq"].pause()
+    return "pause"
+
+@app.route("/unpause")
+def unpause():
+    """hello"""
+    app.config["rbq"].unpause()
+    return "unpause"
+
+@app.route("/delete_last")
+def delete_last():
+    """hello"""
+    app.config["rbq"].delete_last()
+    return "delete"
 
 @app.route("/silence")
 def add_silence():
@@ -601,15 +628,6 @@ def main():
     # rbq.start_ah()
     rbq.play()
 
-#    idlist = []
-#    music_section = rbq.server.library.section(LIBRARY_SECTION)
-#    for artist in music_section.all():
-#        for album in artist.albums():
-#            idlist.append(album.key)
-#    with open('./list', 'w') as list_fh:
-#        list_fh.write('\n'.join(idlist))
-#        
-#    sys.exit()
     threading.Thread(target=web, daemon=True, args=(rbq,)).start()
     threading.Thread(target=update_status, args=(rbq,), daemon=True).start()
     try:
@@ -617,7 +635,6 @@ def main():
         while True:
             logging.getLogger("plexapi").setLevel(logging.INFO)
             try:
-                rbq.refresh_play_queue_from_server()
                 rbq.sync_playlist()
                 rbq.update_now_playing()
                 rbq.ready = True
