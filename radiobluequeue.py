@@ -11,7 +11,9 @@ import base64
 import threading
 import subprocess
 import traceback
+import shutil
 import math
+import numpy
 import requests
 
 from datetime import datetime
@@ -35,12 +37,13 @@ logging.getLogger("asyncio").setLevel(logging.WARNING)
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
 
+DEFAULT_STREAMS = [
+    'http://192.168.1.120:8000/stream','http://radioblue.net:8000/stream/stream.mp3']
 SERVER_URL = "http://127.0.0.1:32400"
 SERVER_TOKEN = os.getenv("PLEX_TOKEN", "")
 CLIENT_NAME = os.getenv("CLIENT_NAME", "MyPlexamp")
 LIBRARY_SECTION = os.getenv("LIBRARY_SECTION", "Music")
 TIDBYT_SERVER = "http://192.168.1.120:5123"
-PIXLET_PATH = "/usr/local/bin/pixlet"
 CONFIG_FILE = "config.json"
 ENABLE_ARTWORK = False
 ITEMS_BEFORE_SILENCE = 6
@@ -72,6 +75,10 @@ class RadioBlueQueue:
         self.server = None
         self.playlists = []
         self.added_items = 0
+        self.paused = False
+        self.time_since_stream_audio = 0
+        self.stream_online = False
+        self.server_play_queue = None
 
     def setup(self):
         self.options = self.get_all_options()
@@ -127,11 +134,13 @@ class RadioBlueQueue:
         options = self.get_connection_options(prev_options)
         self.options = options
         self.test_server_connection()
-        playlist_options = self.get_playlist_options(prev_options)
-        options.update(playlist_options)
         client_options = self.get_client_options(prev_options)
         options.update(client_options)
+        playlist_options = self.get_playlist_options(prev_options)
+        options.update(playlist_options)
 
+        if os.path.exists(CONFIG_FILE):
+            shutil.copyfile(CONFIG_FILE, f'{CONFIG_FILE}.{time.time()}')
         with open(CONFIG_FILE, "w", encoding="utf-8") as config_fh:
             options_cp = options.copy()
             if options_cp.get("password"):
@@ -210,6 +219,13 @@ class RadioBlueQueue:
             message="Silence track GUID (Optional)",
             default=old_options.get("silence_track", ""),
         ).execute()
+        stream_choices = []
+        for stream_url in DEFAULT_STREAMS:
+            stream_choices.append(Choice(stream_url))
+        options["stream_url"] = inquirer.select(
+            message="External Stream URL",
+            default=old_options.get("stream_url"),
+            choices=stream_choices).execute()
         return options
 
     def get_connection_options(self, old_options):
@@ -217,8 +233,7 @@ class RadioBlueQueue:
         options = {}
 
         connection_method_choices = [
-            Choice("local_ip", name="Local IP address"),
-            Choice("plex_discovery", name="Plex.tv Discovery"),
+            Choice("local_ip", name="Local IP address")
         ]
         options["connection_method"] = inquirer.select(
             message="Choose a method to find your Plex server",
@@ -238,33 +253,6 @@ class RadioBlueQueue:
                 message="Plex Server Name",
                 default=old_options.get("server_name", ""),
             ).execute()
-        elif options["connection_method"] == "plex_discovery":
-            options["username"] = inquirer.text(
-                message="Plex.tv E-mail", default=old_options.get("username", "")
-            ).execute()
-            options["password"] = inquirer.secret(
-                message="Plex.tv Password",
-            ).execute()
-
-            LOG.info(f"Logging into My Plex as {options['username']}...")
-            account = MyPlexAccount(options["username"], options["password"])
-            LOG.info("Discovering available Plex servers (this is slow)...")
-            logging.getLogger("plexapi").setLevel(logging.CRITICAL)
-            history = account.history()
-            logging.getLogger("plexapi").setLevel(logging.WARNING)
-
-            all_servers = []
-            server_choices = []
-            for item in history:
-                server_name = item._server.friendlyName
-                if server_name not in all_servers:
-                    all_servers.append(server_name)
-                    server_choices.append(Choice(server_name))
-            options["server_name"] = inquirer.select(
-                message="Plex Server Name",
-                default=old_options.get("server_name"),
-                choices=server_choices,
-            ).execute()
 
         return options
 
@@ -275,7 +263,8 @@ class RadioBlueQueue:
 
     def refresh_play_queue_from_server(self):
         """Pull the PQ from the server"""
-        self.play_queue = self.play_queue.get(self.server, self.play_queue.playQueueID)
+        self.server_play_queue = self.play_queue.get(
+            self.server, self.play_queue.playQueueID)
 
     def refresh_play_queue(self):
         """Refresh the play queue"""
@@ -382,14 +371,17 @@ class RadioBlueQueue:
         if self.currently_playing:
             track_title = self.currently_playing.get("title")
 
+        if not self.server_play_queue:
+            return
+
         total_duration = 0
         queue_count = 0
         on_mic = ""
         time_til_silence = 0
         silence_tracker_armed = False
         silence_tracker_has_been_armed = False
-        for item in self.play_queue.items:
-            if item.playQueueItemID <= self.play_queue.playQueueSelectedItemID:
+        for item in self.server_play_queue.items:
+            if item.playQueueItemID <= self.server_play_queue.playQueueSelectedItemID:
                 continue
             is_silence_track = False
             if item.guid == self.options.get("silence_track"):
@@ -503,6 +495,8 @@ class RadioBlueQueue:
             "on_mic": on_mic,
             "mic_live": mic_live,
             "mic_color": mic_color,
+            "stream_online": self.stream_online,
+            "time_since_stream_audio": self.time_since_stream_audio,
         }
         with open("./timeleft.json", "w", encoding="utf-8") as tl_fh:
             tl_fh.write(json.dumps(timeleft_data))
@@ -534,7 +528,12 @@ class RadioBlueQueue:
 
     def pause(self):
         """Pause"""
-        self.client.pause()
+        if self.paused:
+            self.client.play()
+            self.paused = False
+        else:
+            self.client.pause()
+            self.paused = True
 
     def unpause(self):
         """Play"""
@@ -559,6 +558,11 @@ class RadioBlueQueue:
                     pass
             self.refresh_play_queue()
 
+    def get_stream(self):
+        """Fetch the mp3 stream"""
+        stream_url = self.options.get('stream_url', '')
+        return requests.get(stream_url, stream=True)
+
 
 def web(rbq):
     """Run web server"""
@@ -582,11 +586,13 @@ def next_track():
     app.config["rbq"].next_track()
     return "next track"
 
+
 @app.route("/pause")
 def pause():
     """hello"""
     app.config["rbq"].pause()
     return "pause"
+
 
 @app.route("/unpause")
 def unpause():
@@ -594,11 +600,13 @@ def unpause():
     app.config["rbq"].unpause()
     return "unpause"
 
+
 @app.route("/delete_last")
 def delete_last():
     """hello"""
     app.config["rbq"].delete_last()
     return "delete"
+
 
 @app.route("/silence")
 def add_silence():
@@ -617,7 +625,40 @@ def update_status(rbq):
             rbq.update_stats()
         except Exception:
             pass
+        try:
+            rbq.update_now_playing()
+        except Exception:
+            pass
+ 
         time.sleep(0.5)
+
+
+def get_stream(rbq):
+    """Fetch the mp3 stream"""
+    return requests.get(rbq.get('options').get('stream_url', ''), stream=True)
+
+
+def dead_air_detector(rbq):
+    """Detect dead air"""
+    while True:
+        with open('stream.mp3', 'wb') as f:
+            radiostream = rbq.get_stream() 
+            for block in radiostream.iter_content(4096):
+                samps = 0
+                try:
+                    samps = numpy.frombuffer(block, dtype = numpy.int16)
+                except ValueError:
+                    rbq.stream_online = False
+                    time.sleep(1)
+                    radiostream = rbq.get_stream()
+                    continue
+                rbq.stream_online = True
+                rms = numpy.sqrt(numpy.mean(samps**2))
+                db = 20*numpy.log10(rms)
+                if not math.isnan(db) and db < 30:
+                    last_audio_time = time.time()
+                diff_time = time.time() - last_audio_time
+                rbq.time_since_stream_audio = diff_time
 
 
 def main():
@@ -630,13 +671,14 @@ def main():
 
     threading.Thread(target=web, daemon=True, args=(rbq,)).start()
     threading.Thread(target=update_status, args=(rbq,), daemon=True).start()
+    threading.Thread(target=dead_air_detector, args=(rbq,), daemon=True).start()
     try:
         rbq.tidbyt("nowplaying")
         while True:
             logging.getLogger("plexapi").setLevel(logging.INFO)
             try:
                 rbq.sync_playlist()
-                rbq.update_now_playing()
+                rbq.refresh_play_queue_from_server() 
                 rbq.ready = True
             except Exception:
                 LOG.error(traceback.format_exc())
