@@ -640,25 +640,29 @@ def get_stream(rbq):
 
 def dead_air_detector(rbq):
     """Detect dead air"""
+    last_audio_time = time.time() 
     while True:
-        with open('stream.mp3', 'wb') as f:
-            radiostream = rbq.get_stream() 
-            for block in radiostream.iter_content(4096):
-                samps = 0
-                try:
-                    samps = numpy.frombuffer(block, dtype = numpy.int16)
-                except ValueError:
-                    rbq.stream_online = False
-                    time.sleep(1)
-                    radiostream = rbq.get_stream()
-                    continue
-                rbq.stream_online = True
+        radiostream = rbq.get_stream() 
+        for block in radiostream.iter_content(4096):
+            samps = 0
+            try:
+                samps = numpy.frombuffer(block, dtype = numpy.int16)
+            except ValueError:
+                rbq.stream_online = False
+                time.sleep(1)
+                radiostream = rbq.get_stream()
+                continue
+            rbq.stream_online = True
+            try:
                 rms = numpy.sqrt(numpy.mean(samps**2))
-                db = 20*numpy.log10(rms)
-                if not math.isnan(db) and db < 30:
-                    last_audio_time = time.time()
-                diff_time = time.time() - last_audio_time
-                rbq.time_since_stream_audio = diff_time
+            except Exception:
+                LOG.error(f"sampe debug: {samps}")
+                continue
+            db = 20*numpy.log10(rms)
+            if not math.isnan(db) and db < 30:
+                last_audio_time = time.time()
+            diff_time = time.time() - last_audio_time
+            rbq.time_since_stream_audio = int(diff_time)
 
 
 def main():

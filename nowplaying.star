@@ -22,6 +22,8 @@ def main():
     on_mic = rep.json()['on_mic']
     mic_live = rep.json()['mic_live']
     mic_color = rep.json()['mic_color']
+    time_since_stream_audio = rep.json()['time_since_stream_audio']
+    stream_online = rep.json()['stream_online']
  
     percent = rep.json()['percent'] 
 
@@ -51,6 +53,26 @@ def main():
     elif mic_live:
         text_rows.append(render.Text("LIVE MIC", color=mic_color))
  
+    if time_since_stream_audio > 10:
+        text_rows = [
+            render.Stack(
+                children = [
+                    render.Box(width=75, height=35, color="#911"),
+                    render.Text("DEAD AIR", color="#fff"),
+                    render.Text("Time: %ds" % time_since_stream_audio, color="#fff", height=20)
+                ]
+            )
+        ]
+    if not stream_online:
+        text_rows = [
+            render.Stack(
+                children = [
+                    render.Box(width=75, height=35, color="#911"),
+                    render.WrappedText("STREAM OFFLINE", color="#fff"),
+                ]
+            )
+        ]
+
     return render.Root(
         child = render.Column(
             children = text_rows
