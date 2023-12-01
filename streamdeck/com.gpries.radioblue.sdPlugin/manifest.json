@@ -1,9 +1,9 @@
 {
 	"SDKVersion": 2,
-	"Author": "Elgato Systems",
+	"Author": "Greg Pries",
 	"CodePath": "app.html",
 	"Description": "Example description",
-	"Name": "Stream Deck Template",
+	"Name": "Radio Blue",
 	"Icon": "actions/template/assets/action",
 	"URL": "https://www.elgato.com/en/gaming/stream-deck",
 	"Version": "1.0.2",
@@ -20,7 +20,7 @@
 			"MinimumVersion": "10"
 		}
 	],
-	"Category": "Template Plugin",
+	"Category": "Radio Blue",
 	"CategoryIcon": "actions/template/assets/actionimage",
 	"Actions": [
 		{
@@ -42,7 +42,7 @@
 				}
 			],
 			"Tooltip": "This is an example tooltip",
-			"UUID": "com.elgato.template.action",
+			"UUID": "com.gpries.radioblue.action",
 			"PropertyInspectorPath": "actions/template/property-inspector/inspector.html"
 		}
 	]

@@ -79,6 +79,7 @@ class RadioBlueQueue:
         self.time_since_stream_audio = 0
         self.stream_online = False
         self.server_play_queue = None
+        self.track_log = f'./track_log_{time.time()}.txt'
 
     def setup(self):
         self.options = self.get_all_options()
@@ -338,6 +339,15 @@ class RadioBlueQueue:
 
             self.currently_playing = {"title": session.title, "guid": session.guid}
             LOG.debug(f"Now playing: {session.title}")
+
+            # auto on-mic
+            if sesssion.guid == self.options.get("silence_track"):
+                mic_on()
+            with open(self.track_log, 'a', encoding='utf-8') as track_log_fh:
+                track_string = f'{session.title} by {session.grandparentTitle} ' \
+                               f'((session.year})'
+                track_log_fh.write(track_string)
+            
             ps_key = session.guid
             self.played_songs[ps_key] = True
 
@@ -584,6 +594,7 @@ def timeleft():
 def next_track():
     """hello"""
     app.config["rbq"].next_track()
+    mic_off()
     return "next track"
 
 
@@ -606,6 +617,60 @@ def delete_last():
     """hello"""
     app.config["rbq"].delete_last()
     return "delete"
+
+
+@app.route("/mic_off")
+def mic_off():
+    """hello"""
+    diff_time = 0
+    if app.config.get("last_mute"):
+        diff_time = time.time() - app.config.get("last_mute")
+ 
+    if diff_time and diff_time < 2:
+        with open('./debug.txt', 'a') as dw:
+            dw.write(f"{time.time()} - debouncing mic off: {diff_time}\n")
+        return "ok"
+
+    app.config["last_mute"] = time.time()
+    subprocess.run(['./mute.sh'])
+    subprocess.run(['./offmic.sh'])
+    with open('./debug.txt', 'a') as dw:
+        dw.write(f"{time.time()} - mic off\n")
+    return "mic off"
+
+
+@app.route("/mic_on")
+def mic_on():
+    """hello"""
+    diff_time = 0
+    if app.config.get("last_unmute"):
+        diff_time = time.time() - app.config.get("last_unmute")
+ 
+    if diff_time and diff_time < 2:
+        with open('./debug.txt', 'a') as dw:
+            dw.write(f"{time.time()} - debouncing mic on: {diff_time}\n")
+        return "ok"
+
+    app.config["last_unmute"] = time.time()
+ 
+    subprocess.run(['./unmute.sh'])
+    subprocess.run(['./onmic.sh'])
+    with open('./debug.txt', 'a') as dw:
+        dw.write(f"{time.time()} - mic on\n")
+    return "mic on"
+
+
+@app.route("/mic_toggle")
+def mic_toggle():
+    """hello"""
+    with open('./debug.txt', 'a') as dw:
+        dw.write(f"{time.time()} - mic toggle")
+
+    if os.path.exists('./mic.indicator'):
+        mic_off() 
+    else:
+        mic_on()
+    return "mic toggle"
 
 
 @app.route("/silence")

@@ -1,7 +1,7 @@
 load("render.star", "render")
 load("http.star", "http")
 
-TRACK_TIME_URL = "http://192.168.1.244:5050"
+TRACK_TIME_URL = "http://192.168.1.245:5050"
 
 def main():
     return render.Root(
