@@ -341,12 +341,15 @@ class RadioBlueQueue:
             LOG.debug(f"Now playing: {session.title}")
 
             # auto on-mic
-            if sesssion.guid == self.options.get("silence_track"):
+            if session.guid == self.options.get("silence_track"):
+                LOG.debug("Enabling mic due to silence track")
                 mic_on()
+            album = session.album() 
             with open(self.track_log, 'a', encoding='utf-8') as track_log_fh:
                 track_string = f'{session.title} by {session.grandparentTitle} ' \
-                               f'((session.year})'
-                track_log_fh.write(track_string)
+                               f'({album.year})'
+                track_log_fh.write(track_string + "\n")
+            LOG.debug(f"Adding {track_string} to {self.track_log}")
             
             ps_key = session.guid
             self.played_songs[ps_key] = True
@@ -679,6 +682,15 @@ def add_silence():
     app.config["rbq"].add_silence()
     return "add silence"
 
+@app.route("/track_log")
+def track_log():
+    track_log = ""
+    with open(app.config["rbq"].track_log, 'r', encoding='utf-8') as track_fh:
+        track_log = track_fh.read().splitlines()
+    track_log.reverse()
+    return track_log
+
+
 
 def update_status(rbq):
     """Update status"""
@@ -689,11 +701,11 @@ def update_status(rbq):
         try:
             rbq.update_stats()
         except Exception:
-            pass
+            LOG.info(traceback.format_exc())
         try:
             rbq.update_now_playing()
         except Exception:
-            pass
+            LOG.info(traceback.format_exc())
  
         time.sleep(0.5)
 
