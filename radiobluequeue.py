@@ -15,6 +15,7 @@ import shutil
 import math
 import numpy
 import requests
+import pprint
 
 from datetime import datetime
 from flask import Flask, jsonify
@@ -307,9 +308,20 @@ class RadioBlueQueue:
 
             self.queued_songs[song.guid] = song
             try:
-                self.play_queue.addItem(song)
+                if 'tidal' in song.parentThumb:
+                    headers = {"X-Plex-Token": self.options.get("server_token")}
+                    tidal_guid = song.guid.split('/')[-1]
+                    uri = f'provider%3A%2F%2Ftv.plex.provider.music%2Flibrary' \
+                          f'%2Fmetadata%2F{tidal_guid}'
+                    suffix = f'/playQueues/{self.play_queue.playQueueID}?uri={uri}'
+                    url = f'{self.options.get("server_url")}{suffix}'
+                    response = requests.put(url, headers=headers)
+                    response.raise_for_status()
+                else:
+                    self.play_queue.addItem(song)
             except Exception:
                 LOG.error("Failed to add item to play queue")
+                LOG.debug(traceback.format_exc())
         self.refresh_play_queue()
 
     def get_artwork(self, suffix):
